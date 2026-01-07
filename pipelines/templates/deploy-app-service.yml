@@ -1,0 +1,63 @@
+# Azure Pipeline Templates - Step: Deploy to Azure App Service
+
+parameters:
+  - name: azureSubscription
+    type: string
+  - name: appServiceName
+    type: string
+  - name: artifactName
+    type: string
+    default: 'drop'
+  - name: package
+    type: string
+    default: '$(Pipeline.Workspace)/**/*.zip'
+  - name: deploymentMethod
+    type: string
+    default: 'auto'
+    values:
+      - auto
+      - zipDeploy
+      - runFromPackage
+  - name: slotName
+    type: string
+    default: ''
+  - name: appSettings
+    type: string
+    default: ''
+
+steps:
+  - download: current
+    artifact: ${{ parameters.artifactName }}
+    displayName: 'Download Build Artifacts'
+    
+  - ${{ if ne(parameters.appSettings, '') }}:
+    - task: AzureAppServiceSettings@1
+      displayName: 'Update App Service Settings'
+      inputs:
+        azureSubscription: '${{ parameters.azureSubscription }}'
+        appName: '${{ parameters.appServiceName }}'
+        resourceGroupName: '$(resourceGroupName)'
+        appSettings: '${{ parameters.appSettings }}'
+        ${{ if ne(parameters.slotName, '') }}:
+          slotName: '${{ parameters.slotName }}'
+        
+  - task: AzureWebApp@1
+    displayName: 'Deploy to Azure App Service'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      appName: '${{ parameters.appServiceName }}'
+      package: '${{ parameters.package }}'
+      deploymentMethod: '${{ parameters.deploymentMethod }}'
+      ${{ if ne(parameters.slotName, '') }}:
+        slotName: '${{ parameters.slotName }}'
+        
+  - ${{ if ne(parameters.slotName, '') }}:
+    - task: AzureAppServiceManage@0
+      displayName: 'Swap Deployment Slots'
+      inputs:
+        azureSubscription: '${{ parameters.azureSubscription }}'
+        action: 'Swap Slots'
+        webAppName: '${{ parameters.appServiceName }}'
+        resourceGroupName: '$(resourceGroupName)'
+        sourceSlot: '${{ parameters.slotName }}'
+        swapWithProduction: true

@@ -1,0 +1,147 @@
+# Example Azure Pipeline for Node.js Application
+# Copy this file to your microservice repository and customize
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    exclude:
+      - docs/**
+      - README.md
+
+variables:
+  - name: vmImageName
+    value: 'ubuntu-latest'
+  - name: nodeVersion
+    value: '18.x'
+  - name: azureSubscription
+    value: 'YOUR_SERVICE_CONNECTION_NAME'
+  - name: workloadName
+    value: 'myapp'
+
+stages:
+  - stage: Build
+    displayName: 'Build Application'
+    jobs:
+      - job: Build
+        displayName: 'Build Node.js Application'
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - template: templates/build-node.yml@qops-hub-infra
+            parameters:
+              nodeVersion: $(nodeVersion)
+              packageManager: 'npm'
+              buildScript: 'build'
+              runTests: true
+              artifactName: 'drop'
+              artifactPath: 'dist'
+
+  - stage: DeployDev
+    displayName: 'Deploy to Development'
+    dependsOn: Build
+    condition: succeeded()
+    variables:
+      - name: environment
+        value: 'dev'
+      - name: resourceGroupName
+        value: 'rg-$(workloadName)-dev-weu-001'
+    jobs:
+      - deployment: DeployInfrastructure
+        displayName: 'Deploy Infrastructure'
+        environment: 'dev'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - checkout: qops-hub-infra
+                
+                - template: pipelines/templates/deploy-bicep.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    resourceGroupName: $(resourceGroupName)
+                    location: 'westeurope'
+                    templateFile: 'qops-hub-infra/bicep/main-webapp.bicep'
+                    parametersFile: 'qops-hub-infra/bicep/environments/dev.parameters.json'
+                    overrideParameters: '-workloadName $(workloadName) -linuxFxVersion "NODE|18-lts"'
+                    
+      - deployment: DeployApplication
+        displayName: 'Deploy Application'
+        dependsOn: DeployInfrastructure
+        environment: 'dev'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: pipelines/templates/deploy-app-service.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    appServiceName: 'app-$(workloadName)-dev-weu-001'
+                    artifactName: 'drop'
+                    appSettings: |
+                      -NODE_ENV development
+                      -APPLICATIONINSIGHTS_CONNECTION_STRING $(appInsightsConnectionString)
+
+  - stage: DeployProd
+    displayName: 'Deploy to Production'
+    dependsOn: DeployDev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      - name: environment
+        value: 'prod'
+      - name: resourceGroupName
+        value: 'rg-$(workloadName)-prod-weu-001'
+    jobs:
+      - deployment: DeployInfrastructure
+        displayName: 'Deploy Infrastructure'
+        environment: 'prod'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - checkout: qops-hub-infra
+                
+                - template: pipelines/templates/deploy-bicep.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    resourceGroupName: $(resourceGroupName)
+                    location: 'westeurope'
+                    templateFile: 'qops-hub-infra/bicep/main-webapp.bicep'
+                    parametersFile: 'qops-hub-infra/bicep/environments/prod.parameters.json'
+                    overrideParameters: '-workloadName $(workloadName) -linuxFxVersion "NODE|18-lts"'
+                    
+      - deployment: DeployApplication
+        displayName: 'Deploy Application'
+        dependsOn: DeployInfrastructure
+        environment: 'prod'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: pipelines/templates/deploy-app-service.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    appServiceName: 'app-$(workloadName)-prod-weu-001'
+                    artifactName: 'drop'
+                    appSettings: |
+                      -NODE_ENV production
+                      -APPLICATIONINSIGHTS_CONNECTION_STRING $(appInsightsConnectionString)
+
+resources:
+  repositories:
+    - repository: qops-hub-infra
+      type: github
+      name: johanpearson/qops-hub-infra
+      ref: main

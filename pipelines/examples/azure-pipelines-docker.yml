@@ -1,0 +1,147 @@
+# Example Azure Pipeline for Docker-based Microservice
+# Copy this file to your microservice repository and customize
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    exclude:
+      - docs/**
+      - README.md
+
+variables:
+  - name: vmImageName
+    value: 'ubuntu-latest'
+  - name: azureSubscription
+    value: 'YOUR_SERVICE_CONNECTION_NAME'
+  - name: containerRegistry
+    value: 'YOUR_CONTAINER_REGISTRY_CONNECTION'
+  - name: workloadName
+    value: 'myapp'
+  - name: dockerImageName
+    value: 'myapp-service'
+
+stages:
+  - stage: Build
+    displayName: 'Build and Push Docker Image'
+    jobs:
+      - job: Build
+        displayName: 'Build Docker Image'
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - template: templates/build-docker.yml@qops-hub-infra
+            parameters:
+              dockerfilePath: 'Dockerfile'
+              buildContext: '.'
+              containerRegistry: $(containerRegistry)
+              repository: $(dockerImageName)
+              tags:
+                - '$(Build.BuildId)'
+                - 'latest'
+                - '$(Build.SourceBranchName)'
+
+  - stage: DeployDev
+    displayName: 'Deploy to Development'
+    dependsOn: Build
+    condition: succeeded()
+    variables:
+      - name: environment
+        value: 'dev'
+      - name: resourceGroupName
+        value: 'rg-$(workloadName)-dev-weu-001'
+    jobs:
+      - deployment: DeployInfrastructure
+        displayName: 'Deploy Infrastructure'
+        environment: 'dev'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - checkout: qops-hub-infra
+                
+                - template: pipelines/templates/deploy-bicep.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    resourceGroupName: $(resourceGroupName)
+                    location: 'westeurope'
+                    templateFile: 'qops-hub-infra/bicep/main-microservice.bicep'
+                    parametersFile: 'qops-hub-infra/bicep/environments/dev.parameters.json'
+                    overrideParameters: '-workloadName $(workloadName) -dockerImage "$(containerRegistryName).azurecr.io/$(dockerImageName):$(Build.BuildId)"'
+                    
+      - deployment: DeployApplication
+        displayName: 'Deploy Application'
+        dependsOn: DeployInfrastructure
+        environment: 'dev'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  displayName: 'Deploy Container to App Service'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    appName: 'app-$(workloadName)-dev-weu-001'
+                    containers: '$(containerRegistryName).azurecr.io/$(dockerImageName):$(Build.BuildId)'
+
+  - stage: DeployProd
+    displayName: 'Deploy to Production'
+    dependsOn: DeployDev
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      - name: environment
+        value: 'prod'
+      - name: resourceGroupName
+        value: 'rg-$(workloadName)-prod-weu-001'
+    jobs:
+      - deployment: DeployInfrastructure
+        displayName: 'Deploy Infrastructure'
+        environment: 'prod'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - checkout: qops-hub-infra
+                
+                - template: pipelines/templates/deploy-bicep.yml@qops-hub-infra
+                  parameters:
+                    azureSubscription: $(azureSubscription)
+                    resourceGroupName: $(resourceGroupName)
+                    location: 'westeurope'
+                    templateFile: 'qops-hub-infra/bicep/main-microservice.bicep'
+                    parametersFile: 'qops-hub-infra/bicep/environments/prod.parameters.json'
+                    overrideParameters: '-workloadName $(workloadName) -dockerImage "$(containerRegistryName).azurecr.io/$(dockerImageName):$(Build.BuildId)"'
+                    
+      - deployment: DeployApplication
+        displayName: 'Deploy Application'
+        dependsOn: DeployInfrastructure
+        environment: 'prod'
+        pool:
+          vmImage: $(vmImageName)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  displayName: 'Deploy Container to App Service'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    appName: 'app-$(workloadName)-prod-weu-001'
+                    containers: '$(containerRegistryName).azurecr.io/$(dockerImageName):$(Build.BuildId)'
+                    
+resources:
+  repositories:
+    - repository: qops-hub-infra
+      type: github
+      name: johanpearson/qops-hub-infra
+      ref: main

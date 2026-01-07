@@ -1,0 +1,81 @@
+# Azure Pipeline Templates - Step: Build Node.js Application
+
+parameters:
+  - name: nodeVersion
+    type: string
+    default: '18.x'
+  - name: workingDirectory
+    type: string
+    default: '.'
+  - name: packageManager
+    type: string
+    default: 'npm'
+    values:
+      - npm
+      - yarn
+      - pnpm
+  - name: buildScript
+    type: string
+    default: 'build'
+  - name: runTests
+    type: boolean
+    default: true
+  - name: artifactName
+    type: string
+    default: 'drop'
+  - name: artifactPath
+    type: string
+    default: 'dist'
+
+steps:
+  - task: NodeTool@0
+    displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
+    inputs:
+      versionSpec: ${{ parameters.nodeVersion }}
+      
+  - ${{ if eq(parameters.packageManager, 'npm') }}:
+    - script: npm ci
+      displayName: 'Install Dependencies (npm)'
+      workingDirectory: ${{ parameters.workingDirectory }}
+      
+  - ${{ if eq(parameters.packageManager, 'yarn') }}:
+    - script: yarn install --frozen-lockfile
+      displayName: 'Install Dependencies (yarn)'
+      workingDirectory: ${{ parameters.workingDirectory }}
+      
+  - ${{ if eq(parameters.packageManager, 'pnpm') }}:
+    - script: |
+        npm install -g pnpm
+        pnpm install --frozen-lockfile
+      displayName: 'Install Dependencies (pnpm)'
+      workingDirectory: ${{ parameters.workingDirectory }}
+      
+  - ${{ if eq(parameters.runTests, true) }}:
+    - script: ${{ parameters.packageManager }} run test
+      displayName: 'Run Tests'
+      workingDirectory: ${{ parameters.workingDirectory }}
+      
+    - task: PublishTestResults@2
+      displayName: 'Publish Test Results'
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results.xml'
+        
+  - script: ${{ parameters.packageManager }} run ${{ parameters.buildScript }}
+    displayName: 'Build Application'
+    workingDirectory: ${{ parameters.workingDirectory }}
+    
+  - task: CopyFiles@2
+    displayName: 'Copy Build Output'
+    inputs:
+      SourceFolder: '${{ parameters.workingDirectory }}/${{ parameters.artifactPath }}'
+      Contents: '**'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)'
+      
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifacts'
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: '${{ parameters.artifactName }}'
+      publishLocation: 'Container'

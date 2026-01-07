@@ -1,0 +1,51 @@
+# Azure Pipeline Templates - Job: Build and Deploy
+
+parameters:
+  - name: jobName
+    type: string
+    default: 'BuildAndDeploy'
+  - name: displayName
+    type: string
+    default: 'Build and Deploy'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+  - name: buildType
+    type: string
+    values:
+      - dotnet
+      - node
+      - docker
+  - name: buildParameters
+    type: object
+    default: {}
+  - name: deployInfrastructure
+    type: boolean
+    default: true
+  - name: infrastructureParameters
+    type: object
+    default: {}
+
+jobs:
+  - job: ${{ parameters.jobName }}
+    displayName: ${{ parameters.displayName }}
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    steps:
+      # Build step based on type
+      - ${{ if eq(parameters.buildType, 'dotnet') }}:
+        - template: build-dotnet.yml
+          parameters: ${{ parameters.buildParameters }}
+            
+      - ${{ if eq(parameters.buildType, 'node') }}:
+        - template: build-node.yml
+          parameters: ${{ parameters.buildParameters }}
+            
+      - ${{ if eq(parameters.buildType, 'docker') }}:
+        - template: build-docker.yml
+          parameters: ${{ parameters.buildParameters }}
+      
+      # Infrastructure deployment (optional)
+      - ${{ if eq(parameters.deployInfrastructure, true) }}:
+        - template: deploy-bicep.yml
+          parameters: ${{ parameters.infrastructureParameters }}
