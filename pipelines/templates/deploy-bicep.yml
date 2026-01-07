@@ -1,0 +1,98 @@
+# Azure Pipeline Templates - Step: Deploy Azure Bicep
+
+parameters:
+  - name: azureSubscription
+    type: string
+  - name: resourceGroupName
+    type: string
+  - name: location
+    type: string
+    default: 'westeurope'
+  - name: templateFile
+    type: string
+  - name: parametersFile
+    type: string
+    default: ''
+  - name: deploymentName
+    type: string
+    default: 'deployment-$(Build.BuildId)'
+  - name: deploymentMode
+    type: string
+    default: 'Incremental'
+    values:
+      - Incremental
+      - Complete
+  - name: overrideParameters
+    type: string
+    default: ''
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Create Resource Group (if not exists)'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        az group create \
+          --name ${{ parameters.resourceGroupName }} \
+          --location ${{ parameters.location }} \
+          --tags Environment=$(Environment) DeployedBy=AzurePipelines
+
+  - task: AzureCLI@2
+    displayName: 'Validate Bicep Deployment'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        az deployment group validate \
+          --resource-group ${{ parameters.resourceGroupName }} \
+          --template-file ${{ parameters.templateFile }} \
+          ${{ if ne(parameters.parametersFile, '') }} \
+          --parameters ${{ parameters.parametersFile }} \
+          ${{ if ne(parameters.overrideParameters, '') }} \
+          --parameters ${{ parameters.overrideParameters }}
+
+  - task: AzureCLI@2
+    displayName: 'What-If Analysis'
+    inputs:
+      azureSubscription: '${{ parameters.azureSubscription }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        az deployment group what-if \
+          --resource-group ${{ parameters.resourceGroupName }} \
+          --template-file ${{ parameters.templateFile }} \
+          ${{ if ne(parameters.parametersFile, '') }} \
+          --parameters ${{ parameters.parametersFile }} \
+          ${{ if ne(parameters.overrideParameters, '') }} \
+          --parameters ${{ parameters.overrideParameters }}
+
+  - task: AzureResourceManagerTemplateDeployment@3
+    displayName: 'Deploy Bicep Template'
+    inputs:
+      deploymentScope: 'Resource Group'
+      azureResourceManagerConnection: '${{ parameters.azureSubscription }}'
+      subscriptionId: '$(subscriptionId)'
+      action: 'Create Or Update Resource Group'
+      resourceGroupName: '${{ parameters.resourceGroupName }}'
+      location: '${{ parameters.location }}'
+      templateLocation: 'Linked artifact'
+      csmFile: '${{ parameters.templateFile }}'
+      ${{ if ne(parameters.parametersFile, '') }}:
+        csmParametersFile: '${{ parameters.parametersFile }}'
+      ${{ if ne(parameters.overrideParameters, '') }}:
+        overrideParameters: '${{ parameters.overrideParameters }}'
+      deploymentMode: '${{ parameters.deploymentMode }}'
+      deploymentName: '${{ parameters.deploymentName }}'
+      deploymentOutputs: 'deploymentOutputs'
+
+  - pwsh: |
+      $outputs = ConvertFrom-Json '$(deploymentOutputs)'
+      foreach ($output in $outputs.PSObject.Properties) {
+        Write-Host "##vso[task.setvariable variable=$($output.Name);isOutput=true]$($output.Value.value)"
+        Write-Host "Output: $($output.Name) = $($output.Value.value)"
+      }
+    displayName: 'Process Deployment Outputs'
+    name: bicepOutputs

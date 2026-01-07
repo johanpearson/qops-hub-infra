@@ -1,0 +1,26 @@
+# Build artifacts
+*.json.bak
+*.arm.json
+
+# Bicep compiled ARM templates (not parameter files)
+bicep/main-*.json
+bicep/modules/*.json
+bicep/shared/*.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Azure CLI files
+.azure/
+
+# Temporary files
+*.tmp
+*.log
