@@ -29,7 +29,7 @@ steps:
   - download: current
     artifact: ${{ parameters.artifactName }}
     displayName: 'Download Build Artifacts'
-    
+
   - ${{ if ne(parameters.appSettings, '') }}:
     - task: AzureAppServiceSettings@1
       displayName: 'Update App Service Settings'
@@ -40,7 +40,7 @@ steps:
         appSettings: '${{ parameters.appSettings }}'
         ${{ if ne(parameters.slotName, '') }}:
           slotName: '${{ parameters.slotName }}'
-        
+
   - task: AzureWebApp@1
     displayName: 'Deploy to Azure App Service'
     inputs:
@@ -50,7 +50,7 @@ steps:
       deploymentMethod: '${{ parameters.deploymentMethod }}'
       ${{ if ne(parameters.slotName, '') }}:
         slotName: '${{ parameters.slotName }}'
-        
+
   - ${{ if ne(parameters.slotName, '') }}:
     - task: AzureAppServiceManage@0
       displayName: 'Swap Deployment Slots'

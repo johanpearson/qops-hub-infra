@@ -25,20 +25,20 @@ steps:
     displayName: 'Use .NET ${{ parameters.dotnetVersion }}'
     inputs:
       version: ${{ parameters.dotnetVersion }}
-      
+
   - task: DotNetCoreCLI@2
     displayName: 'Restore NuGet Packages'
     inputs:
       command: 'restore'
       projects: '${{ parameters.projectPath }}'
-      
+
   - task: DotNetCoreCLI@2
     displayName: 'Build Solution'
     inputs:
       command: 'build'
       projects: '${{ parameters.projectPath }}'
       arguments: '--configuration ${{ parameters.buildConfiguration }} --no-restore'
-      
+
   - ${{ if eq(parameters.runTests, true) }}:
     - task: DotNetCoreCLI@2
       displayName: 'Run Unit Tests'
@@ -46,13 +46,13 @@ steps:
         command: 'test'
         projects: '**/*[Tt]ests/*.csproj'
         arguments: '--configuration ${{ parameters.buildConfiguration }} --no-build --collect:"XPlat Code Coverage"'
-        
+
     - task: PublishCodeCoverageResults@1
       displayName: 'Publish Code Coverage'
       inputs:
         codeCoverageTool: 'Cobertura'
         summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-      
+
   - task: DotNetCoreCLI@2
     displayName: 'Publish Application'
     inputs:
@@ -61,7 +61,7 @@ steps:
       projects: '${{ parameters.projectPath }}'
       arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(Build.ArtifactStagingDirectory) --no-build'
       zipAfterPublish: true
-      
+
   - task: PublishBuildArtifacts@1
     displayName: 'Publish Artifacts'
     inputs:

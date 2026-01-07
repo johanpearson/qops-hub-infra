@@ -36,15 +36,15 @@ jobs:
       - ${{ if eq(parameters.buildType, 'dotnet') }}:
         - template: build-dotnet.yml
           parameters: ${{ parameters.buildParameters }}
-            
+
       - ${{ if eq(parameters.buildType, 'node') }}:
         - template: build-node.yml
           parameters: ${{ parameters.buildParameters }}
-            
+
       - ${{ if eq(parameters.buildType, 'docker') }}:
         - template: build-docker.yml
           parameters: ${{ parameters.buildParameters }}
-      
+
       # Infrastructure deployment (optional)
       - ${{ if eq(parameters.deployInfrastructure, true) }}:
         - template: deploy-bicep.yml

@@ -31,7 +31,7 @@ steps:
       tags: |
         ${{ join(chr(10), parameters.tags) }}
       arguments: '${{ parameters.buildArguments }}'
-      
+
   - task: Docker@2
     displayName: 'Push Docker Image to Registry'
     inputs:

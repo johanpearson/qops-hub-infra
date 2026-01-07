@@ -38,7 +38,7 @@ steps:
           --name ${{ parameters.resourceGroupName }} \
           --location ${{ parameters.location }} \
           --tags Environment=$(Environment) DeployedBy=AzurePipelines
-          
+
   - task: AzureCLI@2
     displayName: 'Validate Bicep Deployment'
     inputs:
@@ -53,7 +53,7 @@ steps:
           --parameters ${{ parameters.parametersFile }} \
           ${{ if ne(parameters.overrideParameters, '') }} \
           --parameters ${{ parameters.overrideParameters }}
-          
+
   - task: AzureCLI@2
     displayName: 'What-If Analysis'
     inputs:
@@ -68,7 +68,7 @@ steps:
           --parameters ${{ parameters.parametersFile }} \
           ${{ if ne(parameters.overrideParameters, '') }} \
           --parameters ${{ parameters.overrideParameters }}
-          
+
   - task: AzureResourceManagerTemplateDeployment@3
     displayName: 'Deploy Bicep Template'
     inputs:
@@ -87,7 +87,7 @@ steps:
       deploymentMode: '${{ parameters.deploymentMode }}'
       deploymentName: '${{ parameters.deploymentName }}'
       deploymentOutputs: 'deploymentOutputs'
-      
+
   - pwsh: |
       $outputs = ConvertFrom-Json '$(deploymentOutputs)'
       foreach ($output in $outputs.PSObject.Properties) {
