@@ -23,9 +23,6 @@ param sku string = 'Basic'
 @description('Enable admin user')
 param adminUserEnabled bool = false
 
-@description('Enable anonymous pull access')
-param anonymousPullEnabled bool = false
-
 // Create Container Registry
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: containerRegistryName
@@ -36,7 +33,6 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' =
   }
   properties: {
     adminUserEnabled: adminUserEnabled
-    anonymousPullEnabled: anonymousPullEnabled
     publicNetworkAccess: 'Enabled'
     networkRuleBypassOptions: 'AzureServices'
     policies: {

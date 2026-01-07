@@ -16,19 +16,20 @@ param owner string = ''
 @description('Additional custom tags')
 param customTags object = {}
 
+@description('Deployment timestamp')
+param deploymentTimestamp string = utcNow('yyyy-MM-dd')
+
 // Standard tags that should be applied to all resources
 var standardTags = {
   Environment: environment
   Application: applicationName
   ManagedBy: 'Bicep'
-  DeployedAt: utcNow('yyyy-MM-dd')
+  DeployedAt: deploymentTimestamp
 }
 
 // Optional tags (only included if values are provided)
-var optionalTags = union(
-  !empty(costCenter) ? { CostCenter: costCenter } : {}
-  !empty(owner) ? { Owner: owner } : {}
-)
+var costCenterTag = !empty(costCenter) ? { CostCenter: costCenter } : {}
+var ownerTag = !empty(owner) ? { Owner: owner } : {}
 
 // Combine all tags
-output tags object = union(standardTags, optionalTags, customTags)
+output tags object = union(standardTags, costCenterTag, ownerTag, customTags)
